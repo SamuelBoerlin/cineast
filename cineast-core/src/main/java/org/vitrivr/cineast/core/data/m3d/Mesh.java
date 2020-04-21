@@ -5,6 +5,7 @@ import org.joml.*;
 import org.vitrivr.cineast.core.util.mesh.MeshMathUtil;
 
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +34,9 @@ public class Mesh implements WritableMesh {
         /** Color of the vertex. */
         private final Vector3f color;
 
+        /** Texture UV of the vertex. */
+        private final Vector2f uv;
+        
         /** List of faces the current vertex participates in. */
         private final List<Face> faces = new ArrayList<>(4);
 
@@ -41,7 +45,7 @@ public class Mesh implements WritableMesh {
          * @param position
          */
         public Vertex(Vector3f position) {
-            this(position, new Vector3f(0.0f, 0.0f, 0.0f), new Vector3f(0.0f, 0.0f, 0.0f));
+            this(position, new Vector3f(0.0f, 0.0f, 0.0f), new Vector3f(0.0f, 0.0f, 0.0f), new Vector2f(0.0f, 0.0f));
         }
 
         /**
@@ -50,10 +54,11 @@ public class Mesh implements WritableMesh {
          * @param normal
          * @param color
          */
-        public Vertex(Vector3f position,Vector3f color, Vector3f normal) {
+        public Vertex(Vector3f position,Vector3f color, Vector3f normal, Vector2f uv) {
             this.position = position;
             this.normal = normal;
             this.color = color;
+            this.uv = uv;
         }
 
         /**
@@ -91,6 +96,15 @@ public class Mesh implements WritableMesh {
          */
         public Vector3fc getColor() {
             return this.color;
+        }
+        
+        /**
+         * Getter to the vertex UV.
+         * 
+         * @return Immutable version of the vertex UV.
+         */
+        public Vector2fc getUV() {
+        	return this.uv;
         }
 
         /**
@@ -137,6 +151,49 @@ public class Mesh implements WritableMesh {
                 }
             }
         }
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((color == null) ? 0 : color.hashCode());
+			result = prime * result + ((normal == null) ? 0 : normal.hashCode());
+			result = prime * result + ((position == null) ? 0 : position.hashCode());
+			result = prime * result + ((uv == null) ? 0 : uv.hashCode());
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			Vertex other = (Vertex) obj;
+			if (color == null) {
+				if (other.color != null)
+					return false;
+			} else if (!color.equals(other.color))
+				return false;
+			if (normal == null) {
+				if (other.normal != null)
+					return false;
+			} else if (!normal.equals(other.normal))
+				return false;
+			if (position == null) {
+				if (other.position != null)
+					return false;
+			} else if (!position.equals(other.position))
+				return false;
+			if (uv == null) {
+				if (other.uv != null)
+					return false;
+			} else if (!uv.equals(other.uv))
+				return false;
+			return true;
+		}
     }
 
     /**
@@ -210,6 +267,15 @@ public class Mesh implements WritableMesh {
          */
         public final List<Vertex> getVertices() {
             return Arrays.asList(this.vertices);
+        }
+        
+        /**
+         * Returns the array of vertex indices that make up this face.
+         * 
+         * @return Array of vertex indices.
+         */
+        public final int[] getVertexIndices() {
+        	return this.vertexIndices.clone();
         }
 
         /**
@@ -323,6 +389,12 @@ public class Mesh implements WritableMesh {
     /** The bounding box of the mesh. Its value is lazily calculated during invocation of the @see bounds() method. */
     private float[] boundingbox;
 
+    /** Texture of the mesh */
+    private BufferedImage texture;
+    
+    /** Path to the texture file */
+    private String texturePath;
+    
     /**
      * Copy constructor for Mesh.
      *
@@ -332,7 +404,7 @@ public class Mesh implements WritableMesh {
         this(mesh.numberOfFaces(), mesh.numberOfVertices());
 
         for (Vertex vertex : mesh.getVertices()) {
-            this.addVertex(new Vector3f(vertex.position), new Vector3f(vertex.color), new Vector3f(vertex.normal));
+            this.addVertex(new Vector3f(vertex.position), new Vector3f(vertex.color), new Vector3f(vertex.normal), new Vector2f(vertex.uv));
         }
 
         for (Face face : mesh.getFaces()) {
@@ -342,6 +414,9 @@ public class Mesh implements WritableMesh {
                 this.addFace(new Vector4i(face.vertexIndices[0], face.vertexIndices[1], face.vertexIndices[2], -1));
             }
         }
+        
+        this.texture = mesh.getTexture();
+        this.texturePath = mesh.getTexturePath();
     }
 
     /**
@@ -370,7 +445,7 @@ public class Mesh implements WritableMesh {
      * @param vertex
      */
     public synchronized void addVertex(Vector3f vertex, Vector3f color) {
-        this.addVertex(vertex, color, new Vector3f(0.0f, 0.0f, 0.0f));
+        this.addVertex(vertex, color, new Vector3f(0.0f, 0.0f, 0.0f), new Vector2f(0.0f, 0.0f));
     }
 
     /**
@@ -378,8 +453,8 @@ public class Mesh implements WritableMesh {
      *
      * @param vertex
      */
-    public synchronized void addVertex(Vector3f vertex, Vector3f color, Vector3f normal) {
-        this.vertices.add(new Vertex(vertex, color, normal));
+    public synchronized void addVertex(Vector3f vertex, Vector3f color, Vector3f normal, Vector2f uv) {
+        this.vertices.add(new Vertex(vertex, color, normal, uv));
     }
 
     /**
@@ -587,4 +662,24 @@ public class Mesh implements WritableMesh {
         vertex.color.y = color.getBlue()/255.0f;
         vertex.color.z = color.getGreen()/255.0f;
     }
+
+	@Override
+	public synchronized BufferedImage getTexture() {
+		return this.texture;
+	}
+
+	@Override
+	public synchronized void setTexture(BufferedImage texture) {
+		this.texture = texture;
+	}
+	
+	@Override
+	public synchronized String getTexturePath() {
+		return this.texturePath;
+	}
+	
+	@Override
+	public synchronized void setTexturePath(String texturePath) {
+		this.texturePath = texturePath;
+	}
 }

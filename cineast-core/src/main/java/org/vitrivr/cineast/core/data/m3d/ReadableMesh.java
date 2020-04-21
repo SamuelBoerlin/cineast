@@ -1,8 +1,11 @@
 package org.vitrivr.cineast.core.data.m3d;
 
-import org.joml.Vector3fc;
-
+import java.awt.image.BufferedImage;
 import java.util.List;
+
+import javax.annotation.Nullable;
+
+import org.joml.Vector3fc;
 
 /**
  * @author rgasser
@@ -73,4 +76,20 @@ public interface ReadableMesh {
      * @return True if mesh is empty, false otherwise.
      */
     boolean isEmpty();
+    
+    /**
+     * Returns the texture of this mesh.
+     * 
+     * @return Texture of the mesh.
+     */
+    @Nullable
+    BufferedImage getTexture();
+    
+    /**
+     * Returns the path to the texture file of this mesh.
+     * 
+     * @return Path to the texture file of the mesh.
+     */
+    @Nullable
+    String getTexturePath();
 }

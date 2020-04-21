@@ -34,6 +34,7 @@ import org.vitrivr.cineast.core.extraction.segmenter.general.PassthroughSegmente
 import org.vitrivr.cineast.core.extraction.segmenter.general.Segmenter;
 import org.vitrivr.cineast.core.extraction.segmenter.image.ImageSegmenter;
 import org.vitrivr.cineast.core.extraction.segmenter.image.ImageSequenceSegmenter;
+import org.vitrivr.cineast.core.extraction.segmenter.model.ModelSegmenter;
 import org.vitrivr.cineast.core.extraction.segmenter.video.VideoHistogramSegmenter;
 import org.vitrivr.cineast.core.features.abstracts.MetadataFeatureModule;
 import org.vitrivr.cineast.core.features.extractor.DefaultExtractorInitializer;
@@ -133,12 +134,7 @@ public class GenericExtractionItemHandler implements Runnable, ExtractionItemPro
     handlers.put(MediaType.IMAGE_SEQUENCE, new ImmutablePair<>(ImageSequenceDecoder::new, () -> new ImageSequenceSegmenter(context)));
     handlers.put(MediaType.AUDIO, new ImmutablePair<>(FFMpegAudioDecoder::new, () -> new ConstantLengthAudioSegmenter(context)));
     handlers.put(MediaType.VIDEO, new ImmutablePair<>(FFMpegVideoDecoder::new, () -> new VideoHistogramSegmenter(context)));
-    handlers.put(MediaType.MODEL3D, new ImmutablePair<>(ModularMeshDecoder::new, () -> new PassthroughSegmenter<Mesh>() {
-      @Override
-      protected SegmentContainer getSegmentFromContent(Mesh content) {
-        return new Model3DSegment(content);
-      }
-    }));
+    handlers.put(MediaType.MODEL3D, new ImmutablePair<>(ModularMeshDecoder::new, () -> new ModelSegmenter(context)));
     //Config overwrite
     Config.sharedConfig().getDecoders().forEach((type, decoderConfig) -> {
       handlers.put(type, new ImmutablePair<>(ReflectionHelper.newDecoder(decoderConfig.getDecoder(), type), handlers.getOrDefault(type, null)).getRight());
@@ -227,7 +223,7 @@ public class GenericExtractionItemHandler implements Runnable, ExtractionItemPro
                     .fetchOrCreateSegmentDescriptor(objectId, segmentNumber,
                         container.getStart(), container.getEnd(),
                         container.getAbsoluteStart(), container.getAbsoluteEnd());
-                if (!this.checkAndPersistSegment(mediaSegmentDescriptor)) {
+                if (!this.checkAndPersistSegment(segmenter, container, mediaSegmentDescriptor)) {
                   continue;
                 }
 
@@ -440,10 +436,12 @@ public class GenericExtractionItemHandler implements Runnable, ExtractionItemPro
   /**
    * Persists a MediaSegmentDescriptor and performs an existence check before, if so configured. Based on the outcome of that persistence check and the settings in the ExtractionContext this method returns true if segment should be processed further or false otherwise.
    *
+   * @param segmenter Segmenter that has produced the SegmentContainer.
+   * @param container SegmentContainer whose MediaSegmentDescriptor should be persisted.
    * @param descriptor MediaSegmentDescriptor that should be persisted.
    * @return true if segment should be processed further or false if it should be skipped.
    */
-  protected boolean checkAndPersistSegment(MediaSegmentDescriptor descriptor) {
+  protected boolean checkAndPersistSegment(Segmenter segmenter, SegmentContainer container, MediaSegmentDescriptor descriptor) {
     if (descriptor.exists()
         && this.context.existenceCheck() == IdConfig.ExistenceCheck.CHECK_SKIP) {
       LOGGER.info("Segment {} already exists. This segment will be skipped.",
@@ -455,6 +453,7 @@ public class GenericExtractionItemHandler implements Runnable, ExtractionItemPro
       return true;
     } else {
       this.mediaSegmentWriter.write(descriptor);
+      segmenter.persist(container, descriptor);
       return true;
     }
   }

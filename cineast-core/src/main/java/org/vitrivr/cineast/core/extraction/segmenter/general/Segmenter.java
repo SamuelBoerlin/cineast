@@ -1,6 +1,7 @@
 package org.vitrivr.cineast.core.extraction.segmenter.general;
 
 import org.vitrivr.cineast.core.data.entities.MediaObjectDescriptor;
+import org.vitrivr.cineast.core.data.entities.MediaSegmentDescriptor;
 import org.vitrivr.cineast.core.data.segments.SegmentContainer;
 import org.vitrivr.cineast.core.extraction.decode.general.Decoder;
 
@@ -36,6 +37,17 @@ public interface Segmenter<A> extends Runnable, AutoCloseable {
      */
     SegmentContainer getNext() throws InterruptedException;
 
+    
+    /**
+     * Called when the new SegmentContainer returned by {@link #getNext()} is being persisted.
+     * This method can be used to persist additional data such as for example {@link MediaSegmentMetadataDescriptor}'s.
+     * @param container {@link SegmentContainer} returned by {@link #getNext()}.
+     * @param descriptor {@link MediaSegmentDescriptor} of the container.
+     */
+    default void persist(SegmentContainer container, MediaSegmentDescriptor descriptor) {
+    	
+    }
+    
     /**
      * Indicates that the {@link Segmenter} is complete i.e. no new segments are to be expected.
      *

@@ -179,7 +179,7 @@ public abstract class AbstractExtractionFileHandler<T> implements Runnable,
                     .fetchOrCreateSegmentDescriptor(objectId, segmentNumber,
                         container.getStart(), container.getEnd(),
                         container.getAbsoluteStart(), container.getAbsoluteEnd());
-                if (!this.checkAndPersistSegment(mediaSegmentDescriptor)) {
+                if (!this.checkAndPersistSegment(segmenter, container, mediaSegmentDescriptor)) {
                   continue;
                 }
 
@@ -367,10 +367,12 @@ public abstract class AbstractExtractionFileHandler<T> implements Runnable,
   /**
    * Persists a MediaSegmentDescriptor and performs an existence check before, if so configured. Based on the outcome of that persistence check and the settings in the ExtractionContext this method returns true if segment should be processed further or false otherwise.
    *
+   * @param segmenter Segmenter that has produced the SegmentContainer.
+   * @param container SegmentContainer whose MediaSegmentDescriptor should be persisted.
    * @param descriptor MediaSegmentDescriptor that should be persisted.
    * @return true if segment should be processed further or false if it should be skipped.
    */
-  protected boolean checkAndPersistSegment(MediaSegmentDescriptor descriptor) {
+  protected boolean checkAndPersistSegment(Segmenter segmenter, SegmentContainer container, MediaSegmentDescriptor descriptor) {
     if (descriptor.exists()
         && this.context.existenceCheck() == IdConfig.ExistenceCheck.CHECK_SKIP) {
       LOGGER.info("Segment {} already exists. This segment will be skipped.",
@@ -382,6 +384,7 @@ public abstract class AbstractExtractionFileHandler<T> implements Runnable,
       return true;
     } else {
       this.mediaSegmentWriter.write(descriptor);
+      segmenter.persist(container, descriptor);
       return true;
     }
   }

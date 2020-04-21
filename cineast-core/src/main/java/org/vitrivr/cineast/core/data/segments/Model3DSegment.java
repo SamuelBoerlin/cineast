@@ -1,6 +1,10 @@
 package org.vitrivr.cineast.core.data.segments;
 
-import org.vitrivr.cineast.core.data.m3d.*;
+import org.vitrivr.cineast.core.data.m3d.Mesh;
+import org.vitrivr.cineast.core.data.m3d.ReadableMesh;
+import org.vitrivr.cineast.core.data.m3d.VoxelGrid;
+import org.vitrivr.cineast.core.data.m3d.Voxelizer;
+import org.vitrivr.cineast.core.data.m3d.WritableMesh;
 import org.vitrivr.cineast.core.util.mesh.MeshTransformUtil;
 
 /**
@@ -28,11 +32,12 @@ public class Model3DSegment implements SegmentContainer {
     /** The 3D VoxelGrid associated with the Model3DSegment. This grid is created lazily. */
     private final Object gridLock = new Object();
     private VoxelGrid grid;
-
+    
     /**
      * Default constructor for Model3DSegment
      *
      * @param mesh 3D Mesh associated with the segment.
+     * @param textureFile Path to the texture file. May be null.
      */
     public Model3DSegment(Mesh mesh) {
         this.mesh = new Mesh(mesh);

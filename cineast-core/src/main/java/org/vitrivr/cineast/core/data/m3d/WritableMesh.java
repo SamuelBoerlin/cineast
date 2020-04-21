@@ -1,11 +1,14 @@
 package org.vitrivr.cineast.core.data.m3d;
 
+import java.awt.Color;
+import java.awt.image.BufferedImage;
+
+import javax.annotation.Nullable;
+
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 import org.joml.Vector4i;
-
-import java.awt.*;
 
 /**
  * @author rgasser
@@ -59,4 +62,18 @@ public interface WritableMesh extends ReadableMesh {
      * @param color New color of the vertex.
      */
     void updateColor(int vertexIndex, Color color);
+    
+    /**
+     * Sets the texture of this mesh.
+     * 
+     * @param texture New texture of the mesh.
+     */
+    void setTexture(@Nullable BufferedImage texture);
+    
+    /**
+     * Sets the path of the texture file of this mesh.
+     * 
+     * @param texturePath New path of the texture file of this mesh.
+     */
+    void setTexturePath(@Nullable String texturePath);
 }
