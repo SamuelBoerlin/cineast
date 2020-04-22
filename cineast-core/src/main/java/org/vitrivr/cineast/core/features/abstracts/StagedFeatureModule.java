@@ -97,7 +97,7 @@ public abstract class StagedFeatureModule extends AbstractFeatureModule {
 
         /* Start query-results post-processing phase. */
         benchmark.split(BENCHMARK_SPLITNAME_POSTPROCESSING);
-        List<ScoreElement> results = this.postprocessQuery(partialResults, qcc);
+        List<ScoreElement> results = this.postprocessQuery(features, partialResults, qcc);
 
         /* End the benchmark and return the results. */
         benchmark.end();
@@ -152,7 +152,7 @@ public abstract class StagedFeatureModule extends AbstractFeatureModule {
 
         /* Start query-results post-processing phase. */
         benchmark.split(BENCHMARK_SPLITNAME_POSTPROCESSING);
-        List<ScoreElement> results = this.postprocessQuery(partialResults, qcc);
+        List<ScoreElement> results = this.postprocessQuery(features, partialResults, qcc);
 
         /* End the benchmark and return the results. */
         benchmark.end();
@@ -200,10 +200,11 @@ public abstract class StagedFeatureModule extends AbstractFeatureModule {
      * the lookup stage is processed based on some internal method and finally converted to a list of ScoreElements. The filtered list of
      * ScoreElements is returned by the feature module during retrieval.
      *
+     *@param features The list of feature-vectors for which the query is being run.
      * @param partialResults List of partial results returned by the lookup stage.
      * @return List of final results. Is supposed to be de-duplicated and the number of items should not exceed the number of items per module.
      */
-    protected abstract List<ScoreElement> postprocessQuery(List<SegmentDistanceElement> partialResults, ReadableQueryConfig qcc);
+    protected abstract List<ScoreElement> postprocessQuery(List<float[]> features, List<SegmentDistanceElement> partialResults, ReadableQueryConfig qcc);
 
     /**
      * Returns a list of QueryConfigs for the given list of features. By default, this method simply returns a list of the

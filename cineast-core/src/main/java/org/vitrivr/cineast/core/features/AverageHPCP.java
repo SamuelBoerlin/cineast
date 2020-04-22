@@ -86,7 +86,7 @@ public abstract class AverageHPCP extends StagedFeatureModule {
      * @return List of final results. Is supposed to be de-duplicated and the number of items should not exceed the number of items per module.
      */
     @Override
-    protected List<ScoreElement> postprocessQuery(List<SegmentDistanceElement> partialResults, ReadableQueryConfig qc) {
+    protected List<ScoreElement> postprocessQuery(List<float[]> features, List<SegmentDistanceElement> partialResults, ReadableQueryConfig qc) {
         /* Prepare helper data-structures. */
         final HashMap<String,DistanceElement> map = new HashMap<>();
 

@@ -8,19 +8,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import org.apache.commons.math3.analysis.interpolation.SplineInterpolator;
+import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 import org.vitrivr.cineast.core.config.ReadableQueryConfig;
-import org.vitrivr.cineast.core.data.CorrespondenceFunction;
 import org.vitrivr.cineast.core.data.FloatVectorImpl;
 import org.vitrivr.cineast.core.data.distance.SegmentDistanceElement;
 import org.vitrivr.cineast.core.data.m3d.IndexedTriMesh;
 import org.vitrivr.cineast.core.data.m3d.IndexedTriMesh.Face;
 import org.vitrivr.cineast.core.data.m3d.ReadableMesh;
 import org.vitrivr.cineast.core.data.score.ScoreElement;
+import org.vitrivr.cineast.core.data.score.SegmentScoreElement;
 import org.vitrivr.cineast.core.data.segments.SegmentContainer;
 import org.vitrivr.cineast.core.features.abstracts.StagedFeatureModule;
-import org.vitrivr.cineast.core.util.MathHelper;
 import org.vitrivr.cineast.core.util.mesh.DifferenceOfLaplacian;
 import org.vitrivr.cineast.core.util.mesh.IndexedTriMeshUtil;
 import org.vitrivr.cineast.core.util.mesh.IndexedTriMeshUtil.ColorCode;
@@ -64,14 +65,21 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 	 */
 	private final float lambda;
 
-	public ClusterD2AndColorHistogram(int bins, float lambda) {
-		super("cluster_d2_and_color_histogram", 20.0f /*TODO What should this be??*/, bins);
+	/**
+	 * How many iterations to calculate the histogram 
+	 * average.
+	 */
+	private final int averageIterations;
+
+	public ClusterD2AndColorHistogram(int bins, float lambda, int averageIterations) {
+		super("cluster_d2_and_color_histogram", 1.0f /*TODO What should this be??*/, bins);
 		this.bins = bins;
 		this.lambda = lambda;
+		this.averageIterations = averageIterations;
 	}
 
 	public ClusterD2AndColorHistogram() {
-		this(20, 8.0f);
+		this(20, 8.0f, 5);
 	}
 
 	/**
@@ -128,19 +136,39 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 	 * @return List of final results. Is supposed to be de-duplicated and the number of items should not exceed the number of items per module.
 	 */
 	@Override
-	protected List<ScoreElement> postprocessQuery(List<SegmentDistanceElement> partialResults, ReadableQueryConfig qc) {
-		final CorrespondenceFunction correspondence = qc.getCorrespondenceFunction().orElse(this.correspondence);
-		return ScoreElement.filterMaximumScores(partialResults.stream().map(v -> v.toScore(correspondence)));
+	protected List<ScoreElement> postprocessQuery(List<float[]> features, List<SegmentDistanceElement> partialResults, ReadableQueryConfig qc) {
+		//Unary correspondence mapping
+		/*final CorrespondenceFunction correspondence = qc.getCorrespondenceFunction().orElse(this.correspondence);
+		return ScoreElement.filterMaximumScores(partialResults.stream().map(v -> v.toScore(correspondence)));*/
+
+		//Jensen-Shannon Divergence as similarity measure
+		float[] feature = features.get(0);
+		return ScoreElement.filterMaximumScores(partialResults.stream().map(result -> {
+			List<float[]> resultFeaturesList = this.selector.getFeatureVectors("id", result.getSegmentId(), "feature");
+			if (resultFeaturesList.isEmpty()) {
+				LOGGER.warn("No features could be fetched for the provided segmentId '{}'. Skipping post processing...", result.getSegmentId());
+				return null;
+			}
+
+			float[] resultFeature = resultFeaturesList.get(0);
+
+			return (ScoreElement) new SegmentScoreElement(result.getSegmentId(), Math.min(1.0f, Math.max(0.0f, 0.99f + this.calculateJensenShannonDivergence(feature, resultFeature))));
+		}).filter(score -> score != null));
 	}
 
+	/**
+	 * Calculates a feature vector from the specified mesh using the ClusterD2/Angle+Color algorithm
+	 * @param mesh Mesh to extract feature vector of
+	 * @return Feature vector of mesh
+	 */
 	private float[] featureVectorFromMesh(ReadableMesh mesh) {
 		//TODO Expose all magic values
 
-		IndexedTriMesh[] models = new IndexedTriMesh[3];
-		float[][] scores = new float[3][];
+		IndexedTriMesh[] models = new IndexedTriMesh[4];
+		float[][] scores = new float[4][];
 		FaceList[] faceMap = null;
 
-		for(int i = 0; i < 3; i++) {
+		for(int i = 0; i < 4; i++) {
 			long time = System.currentTimeMillis();
 
 			IndexedTriMesh model = new IndexedTriMesh(mesh);
@@ -158,6 +186,9 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 				IndexedTriMeshUtil.applyVertexDiffusion(model, faceMap, this.lambda / subdivs);
 			}
 
+			//Scale model to have a surface area of 100
+			IndexedTriMeshUtil.scaleSurface(model, 100.0f);
+
 			//Calculate mean curvatures
 			int numVertices = model.getVertices().size();
 			float[] modelScores = new float[numVertices];
@@ -171,10 +202,7 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 				IndexedTriMeshUtil.applyScalarDiffusion(model, faceMap, this.lambda / subdivs, modelScores);
 			}
 
-			//Scale model to have a surface area of 100
-			IndexedTriMeshUtil.scaleSurface(model, 100.0f);
-
-			System.out.println("Loaded model with " + i + " smoothing steps in " + (System.currentTimeMillis() - time) + "ms");
+			LOGGER.info("Loaded model with {} smoothing steps in {}ms", i, (System.currentTimeMillis() - time));
 
 			models[i] = model;
 			scores[i] = modelScores;
@@ -188,7 +216,7 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 		if(image != null) {
 			colorMapper = new TextureColorMapper(models[0], image);
 
-			System.out.println("Found texture: " + mesh.getTexturePath());
+			LOGGER.info("Found model texture: {}", mesh.getTexturePath());
 		} else {
 			colorMapper = new SampleMapper<ColorCode>() {
 				@Override
@@ -200,7 +228,7 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 
 		float totalCurvature = IndexedTriMeshUtil.totalAbsoluteGaussianCurvature(models[0], faceMap);
 
-		System.out.println("Total curvature: " + totalCurvature);
+		LOGGER.info("Total curvature: {}", totalCurvature);
 
 		float a = 450.0f;
 		float b = 2.0f;
@@ -208,42 +236,203 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 
 		int numSamples = (int)Math.max(2000 * Math.pow(Math.max((totalCurvature - a) / b, 0), c), 2000);
 
-		System.out.println("Number of samples: " + numSamples);
+		LOGGER.info("Number of samples: {}", numSamples);
 
-		List<FeatureSample> samples = IndexedTriMeshUtil.sampleFeatures(models[0], saliencyMapper, colorMapper, new ArrayList<>(), numSamples, new Random());
+		int[] totalHistogram = new int[this.bins];
 
-		//Collect saliency samples
-		Collections.sort(samples, (s1, s2) -> -Float.compare(s1.saliency, s2.saliency));
-		List<FeatureSample> saliencySamples = new ArrayList<>(samples.subList(0, numSamples / 10));
+		for(int i = 0; i < this.averageIterations; i++) {
+			LOGGER.info("Sample iteration {}", i);
 
-		float meanEdgeLength = IndexedTriMeshUtil.meanEdgeLength(models[0]);
+			List<FeatureSample> samples = IndexedTriMeshUtil.sampleFeatures(models[0], saliencyMapper, colorMapper, new ArrayList<>(), numSamples, new Random());
 
-		//Collect color samples
-		samples = IndexedTriMeshUtil.sampleFeatures(models[0], saliencyMapper, colorMapper, new ArrayList<>(), numSamples * 2, new Random());
-		Collections.shuffle(samples);
-		List<FeatureSample> colorSamples = IndexedTriMeshUtil.selectColorSamples(models[0], samples, 6, meanEdgeLength * 2.0f, meanEdgeLength * 1.5f, 0.8f);
+			//Collect saliency samples
+			Collections.sort(samples, (s1, s2) -> -Float.compare(s1.saliency, s2.saliency));
+			List<FeatureSample> saliencySamples = new ArrayList<>(samples.subList(0, numSamples / 10));
 
-		List<FeatureSample> clusterSamples = new ArrayList<>(saliencySamples.size() + colorSamples.size());
-		clusterSamples.addAll(saliencySamples);
-		clusterSamples.addAll(colorSamples);
+			float meanEdgeLength = IndexedTriMeshUtil.meanEdgeLength(models[0]);
 
-		System.out.println("Number of clustered samples: " + clusterSamples.size());
+			//Collect color samples
+			samples = IndexedTriMeshUtil.sampleFeatures(models[0], saliencyMapper, colorMapper, new ArrayList<>(), numSamples * 2, new Random());
+			Collections.shuffle(samples);
+			List<FeatureSample> colorSamples = IndexedTriMeshUtil.selectColorSamples(models[0], samples, 6, meanEdgeLength * 2.0f, meanEdgeLength * 1.5f, 0.8f);
 
-		//Cluster samples
-		IsodataClustering clustering = new IsodataClustering(clusterSamples.size() / 20, meanEdgeLength * 2.0f, meanEdgeLength * 10.0f, 10, 100, 200);
-		List<Cluster> clusters = clustering.cluster(clusterSamples, new Random());
+			List<FeatureSample> clusterSamples = new ArrayList<>(saliencySamples.size() + colorSamples.size());
+			clusterSamples.addAll(saliencySamples);
+			clusterSamples.addAll(colorSamples);
 
-		//Compute ClusterAngle + Color feature
-		int[] histogram = IndexedTriMeshUtil.computeCluster2DColorHistogram(clusters, this.bins);
+			LOGGER.info("Number of clustered samples: {}", clusterSamples.size());
 
-		System.out.println("Histogram: " + Arrays.toString(histogram));
+			//Cluster samples
+			IsodataClustering clustering = new IsodataClustering(clusterSamples.size() / 20, meanEdgeLength * 2.0f, meanEdgeLength * 10.0f, 10, 100, 200);
+			List<Cluster> clusters = clustering.cluster(clusterSamples, new Random());
+
+			//Compute ClusterAngle + Color feature
+			int[] histogram = IndexedTriMeshUtil.computeCluster2DColorHistogram(clusters, this.bins);
+
+			LOGGER.info("Histogram: {}", Arrays.toString(histogram));
+
+			for(int j = 0; j < this.bins; j++) {
+				totalHistogram[j] += histogram[j];
+			}
+		}
 
 		float[] feature = new float[this.bins];
 		for(int i = 0; i < this.bins; i++) {
-			feature[i] = histogram[i];
+			feature[i] = totalHistogram[i] / (float)this.averageIterations;
 		}
 
-		/* Returns the normalized vector. */
-		return MathHelper.normalizeL2(feature);
+		return feature;
+	}
+
+	/**
+	 * Calculates the Jensen-Shannon divergence between the two specified features.
+	 * The function is symmetric, it doesn't matter which feature is the first or second.
+	 * @param feature1 First feature
+	 * @param feature2 Second feature
+	 * @return Jensen-Shannon divergence between the two specified features.
+	 */
+	private float calculateJensenShannonDivergence(float[] feature1, float[] feature2) {
+		float sum1 = 0;
+		for(float value : feature1) {
+			sum1 += value;
+		}
+
+		float sum2 = 0;
+		for(float value : feature2) {
+			sum2 += value;
+		}
+
+		float sum3 = 0.5f * (sum1 + sum2);
+		float[] feature3 = new float[feature1.length];
+		for(int i = 0; i < feature1.length; i++) {
+			feature3[i] = 0.5f * (feature1[i] + feature2[i]);
+		}
+
+		PolynomialSplineFunction s1 = this.splineDeriv2(feature1, 1.0f / sum1);
+		PolynomialSplineFunction s2 = this.splineDeriv2(feature2, 1.0f / sum2);
+		PolynomialSplineFunction s3 = this.splineDeriv2(feature3, 1.0f / sum3);
+
+		float bw1 = this.estimateBandwidth(s1);
+		float bw2 = this.estimateBandwidth(s2);
+		float bw3 = this.estimateBandwidth(s3);
+
+		int samples = 1000;
+
+		double dkl13 = 0.0;
+		for(int i = 0; i < samples; i++) {
+			float x1 = i / (float)(samples - 1);
+			float x2 = (i + 1) / (float)(samples - 1);
+
+			float dx = x2 - x1;
+			float mid = 0.5f * (x1 + x2);
+
+			double px = this.estimateDensity(feature1, 1.0f / sum1, bw1, mid);
+			double qx = this.estimateDensity(feature3, 1.0f / sum3, bw3, mid);
+
+			dkl13 -= px * Math.log(px / qx) * dx;
+		}
+
+		double dkl23 = 0.0;
+		for(int i = 0; i < samples; i++) {
+			float x1 = i / (float)(samples - 1);
+			float x2 = (i + 1) / (float)(samples - 1);
+
+			float dx = x2 - x1;
+			float mid = 0.5f * (x1 + x2);
+
+			double px = this.estimateDensity(feature2, 1.0f / sum2, bw2, mid);
+			double qx = this.estimateDensity(feature3, 1.0f / sum3, bw3, mid);
+
+			dkl23 -= px * Math.log(px / qx) * dx;
+		}
+
+		return (float)(0.5f * dkl13 + 0.5f * dkl23);
+	}
+
+	/**
+	 * Estimates the density at a specific x for the given feature.
+	 * @param feature Feature to estimate density of
+	 * @param scale Feature scale
+	 * @param bandwidth Kernel bandwidth
+	 * @param x Value to estimate density at
+	 * @return Density estimation of the feature at value x
+	 */
+	private double estimateDensity(float[] feature, float scale, double bandwidth, float x) {
+		double density = 0.0;
+		float numSamples = 0.0f;
+
+		for(int i = 0; i < feature.length; i++) {
+			float sx = i / (float)(feature.length - 1);
+			float samplesForValue = feature[i] * scale;
+
+			double arg = (x - sx) / (double)bandwidth;
+			density += 1 / Math.sqrt(2 * Math.PI) * Math.exp(-0.5D * arg * arg) * samplesForValue;
+			numSamples += samplesForValue;
+		}
+
+		return density / (numSamples * bandwidth);
+	}
+
+	/**
+	 * Creates the spline of the second derivative of the given feature.
+	 * @param feature Feature to take second derivative of
+	 * @param scale Feature scale
+	 * @return Spline of the second derivative of the given feature
+	 */
+	private PolynomialSplineFunction splineDeriv2(float[] feature, float scale) {
+		SplineInterpolator interpolator = new SplineInterpolator();
+
+		double[] sx = new double[feature.length];
+		double[] sy = new double[feature.length];
+		for(int i = 0; i < feature.length; i++) {
+			sx[i] = i / (float)(feature.length - 1);
+			sy[i] = feature[i] * scale;
+		}
+
+		return interpolator.interpolate(sx, sy).polynomialSplineDerivative().polynomialSplineDerivative();
+	}
+
+	/**
+	 * Estimates a kernel bandwidth h with the specified second derivative ({@link #splineDeriv2(float[], float)} of
+	 * the feature.
+	 * @param c Second derivative of the feature
+	 * @return Kernel bandwidth estimation
+	 */
+	private float estimateBandwidth(PolynomialSplineFunction c) {
+		double[] knots = c.getKnots();
+
+		//Second derivative of cubic polynomial is linear,
+		//so only the end points of the linear segments need to be sampled and the integrals
+		//between can be calculated analytically
+		double integralcsq = 0.0;
+		for(int i = 0;  i < knots.length - 1; i++) {
+			float x1 = (float)knots[i];
+			float x2 = (float)knots[i + 1];
+			float y1 = (float)c.value(x1);
+			float y2 = (float)c.value(x2);
+
+			//Calculate linear segment parameters
+			float dx = x2 - x1;
+			float a = (y2 - y1) / dx;
+			float b = y1;
+
+			//Integral of linear segment squared (a*x + b)^2
+			float n1 = b;
+			float n2 = a * dx + b;
+			float piece = (n2 * n2 * n2 - n1 * n1 * n1) / (3.0f * a);
+
+			//Add to total integral
+			integralcsq += piece;
+		}
+
+		double rk = 0.282095; //Integral of gaussian with variance=1, mean=0, from -inf to +inf = 1 / (2 * sqrt(pi))
+		double mu22 = 1.0; //Integral of c * x^2 * exp(-a*x^2), from -inf to +inf = c * sqrt(pi) / (2 * a^(3/2)). With c=1/sqrt(pi), a=1/2 --> integral = 1
+
+		int n = 20;
+
+		//Bandwidth estimation
+		float h = (float)(Math.pow(rk / (mu22 * integralcsq), 1 / 5.0) * Math.pow(n, -1 / 5.0));
+
+		return h;
 	}
 }

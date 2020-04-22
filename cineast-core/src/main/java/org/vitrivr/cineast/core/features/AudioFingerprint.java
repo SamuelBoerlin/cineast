@@ -121,7 +121,7 @@ public class AudioFingerprint extends StagedFeatureModule {
      * @return List of final results. Is supposed to be de-duplicated and the number of items should not exceed the number of items per module.
      */
     @Override
-    protected List<ScoreElement> postprocessQuery(List<SegmentDistanceElement> partialResults, ReadableQueryConfig qc) {
+    protected List<ScoreElement> postprocessQuery(List<float[]> features, List<SegmentDistanceElement> partialResults, ReadableQueryConfig qc) {
         /* Prepare empty list of results. */
         final ArrayList<ScoreElement> results = new ArrayList<>();
         final HashMap<String, DistanceElement> map = new HashMap<>();
