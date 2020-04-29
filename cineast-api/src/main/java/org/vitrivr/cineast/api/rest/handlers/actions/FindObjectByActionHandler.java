@@ -1,31 +1,38 @@
 package org.vitrivr.cineast.api.rest.handlers.actions;
 
-import com.google.common.collect.Lists;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
-import org.vitrivr.cineast.core.data.entities.MediaObjectDescriptor;
 import org.vitrivr.cineast.api.messages.lookup.IdList;
 import org.vitrivr.cineast.api.messages.result.MediaObjectQueryResult;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
+import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
+import org.vitrivr.cineast.core.data.entities.MediaObjectDescriptor;
 import org.vitrivr.cineast.core.db.dao.reader.MediaObjectReader;
 import org.vitrivr.cineast.standalone.config.Config;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Map;
+import com.google.common.collect.Lists;
 
 /**
  * @author rgasser
  * @version 1.0
  * @created 10.01.17
  */
-public class FindObjectByActionHandler extends ParsingActionHandler<IdList> {
+public class FindObjectByActionHandler extends ParsingActionHandler<IdList, MediaObjectQueryResult> {
 
-    private final static String ATTRIBUTE_NAME = ":attribute";
-    private final static String VALUE_NAME = ":value";
+    public final static String ATTRIBUTE_NAME = ":attribute";
+    public final static String VALUE_NAME = ":value";
 
     private static final Logger LOGGER = LogManager.getLogger();
 
+    @Override
+    public List<RestHttpMethod> supportedMethods() {
+        return Arrays.asList(RestHttpMethod.GET, RestHttpMethod.POST);
+    }
     /**
      * Processes a HTTP GET request.
      *
@@ -82,5 +89,20 @@ public class FindObjectByActionHandler extends ParsingActionHandler<IdList> {
     @Override
     public Class<IdList> inClass() {
         return IdList.class;
+    }
+
+    @Override
+    public String getRoute() {
+        return String.format("find/object/by/%s/%s", ATTRIBUTE_NAME, VALUE_NAME);
+    }
+
+    @Override
+    public String getDescription(RestHttpMethod method) {
+        return "Find object by attribute and value";
+    }
+
+    @Override
+    public Class<MediaObjectQueryResult> outClass() {
+        return MediaObjectQueryResult.class;
     }
 }

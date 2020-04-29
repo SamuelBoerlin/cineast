@@ -1,18 +1,27 @@
 package org.vitrivr.cineast.api.rest.handlers.actions.session;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import org.vitrivr.cineast.api.messages.credentials.Credentials;
+import org.vitrivr.cineast.api.messages.session.SessionState;
+import org.vitrivr.cineast.api.messages.session.StartSessionMessage;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
 import org.vitrivr.cineast.api.rest.exceptions.MethodNotSupportedException;
 import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
 import org.vitrivr.cineast.api.session.CredentialManager;
 import org.vitrivr.cineast.api.session.Session;
 import org.vitrivr.cineast.api.session.SessionManager;
 import org.vitrivr.cineast.api.session.SessionType;
-import org.vitrivr.cineast.api.messages.credentials.Credentials;
-import org.vitrivr.cineast.api.messages.session.SessionState;
-import org.vitrivr.cineast.api.messages.session.StartSessionMessage;
 
-import java.util.Map;
+public class StartSessionHandler extends ParsingActionHandler<StartSessionMessage, SessionState> {
 
-public class StartSessionHandler extends ParsingActionHandler<StartSessionMessage> {
+    @Override
+    public List<RestHttpMethod> supportedMethods() {
+        return Collections.singletonList(RestHttpMethod.POST);
+    }
+
     /**
      * Processes a HTTP GET request. Always throws a {@link MethodNotSupportedException}
      *
@@ -39,4 +48,18 @@ public class StartSessionHandler extends ParsingActionHandler<StartSessionMessag
         return StartSessionMessage.class;
     }
 
+    @Override
+    public String getRoute() {
+        return "session/start";
+    }
+
+    @Override
+    public String getDescription(RestHttpMethod method) {
+        return "Start a new session for given credentials";
+    }
+
+    @Override
+    public Class<SessionState> outClass() {
+        return SessionState.class;
+    }
 }

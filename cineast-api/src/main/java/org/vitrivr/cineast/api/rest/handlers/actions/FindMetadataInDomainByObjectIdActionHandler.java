@@ -1,17 +1,19 @@
 package org.vitrivr.cineast.api.rest.handlers.actions;
 
-import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
-import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
-import org.vitrivr.cineast.api.messages.components.MetadataDomainFilter;
-import org.vitrivr.cineast.api.messages.lookup.IdList;
-import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
-import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
-import org.vitrivr.cineast.standalone.config.Config;
-
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.vitrivr.cineast.api.messages.components.MetadataDomainFilter;
+import org.vitrivr.cineast.api.messages.lookup.IdList;
+import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
+import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
+import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
+import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
+import org.vitrivr.cineast.standalone.config.Config;
 
 /**
  * Finds metadata of a given object id list (REST) / object id (Web) and returns only items in a
@@ -35,11 +37,15 @@ import java.util.stream.Collectors;
  *
  * @author loris.sauter
  */
-public class FindMetadataInDomainByObjectIdActionHandler extends ParsingActionHandler<IdList> {
+public class FindMetadataInDomainByObjectIdActionHandler extends ParsingActionHandler<IdList,MediaObjectMetadataQueryResult> {
 
   private static final String ATTRIBUTE_ID = ":id";
   private static final String DOMAIN_NAME = ":domain";
 
+  @Override
+  public List<RestHttpMethod> supportedMethods() {
+    return Arrays.asList(RestHttpMethod.GET, RestHttpMethod.POST);
+  }
   /**
    * Processes a HTTP GET request.
    *
@@ -90,5 +96,20 @@ public class FindMetadataInDomainByObjectIdActionHandler extends ParsingActionHa
   @Override
   public Class<IdList> inClass() {
     return IdList.class;
+  }
+
+  @Override
+  public String getRoute() {
+    return String.format("find/metadata/in/%s/by/id/%s", DOMAIN_NAME, ATTRIBUTE_ID);
+  }
+
+  @Override
+  public String getDescription(RestHttpMethod method) {
+    return "Find meta data in domain by object id";
+  }
+
+  @Override
+  public Class<MediaObjectMetadataQueryResult> outClass() {
+    return MediaObjectMetadataQueryResult.class;
   }
 }

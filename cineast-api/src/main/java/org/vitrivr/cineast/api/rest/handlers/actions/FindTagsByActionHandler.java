@@ -1,20 +1,22 @@
 package org.vitrivr.cineast.api.rest.handlers.actions;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.vitrivr.cineast.api.rest.exceptions.ActionHandlerException;
-import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
-import org.vitrivr.cineast.api.messages.lookup.IdList;
-import org.vitrivr.cineast.core.data.tag.Tag;
-import org.vitrivr.cineast.core.db.dao.reader.TagReader;
-import org.vitrivr.cineast.standalone.config.Config;
-
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class FindTagsByActionHandler extends ParsingActionHandler<IdList> {
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.vitrivr.cineast.api.messages.lookup.IdList;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
+import org.vitrivr.cineast.api.rest.exceptions.ActionHandlerException;
+import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
+import org.vitrivr.cineast.core.data.tag.Tag;
+import org.vitrivr.cineast.core.db.dao.reader.TagReader;
+import org.vitrivr.cineast.standalone.config.Config;
+
+public class FindTagsByActionHandler extends ParsingActionHandler<IdList,Tag> {
     /** The {@link TagReader} instance used for lookup of {@link Tag}s. */
     private static final TagReader TAG_READER = new TagReader(Config.sharedConfig().getDatabase().getSelectorSupplier().get());
 
@@ -32,6 +34,10 @@ public class FindTagsByActionHandler extends ParsingActionHandler<IdList> {
     private static final String FIELD_NAME = "name";
     private static final String FIELD_MATCHING = "matchingname";
 
+    @Override
+    public List<RestHttpMethod> supportedMethods() {
+        return Arrays.asList(RestHttpMethod.GET, RestHttpMethod.POST);
+    }
     /**
      * Performs the lookup of {@link Tag}s in the system.
      *
@@ -77,5 +83,42 @@ public class FindTagsByActionHandler extends ParsingActionHandler<IdList> {
     @Override
     public Class<IdList> inClass() {
         return IdList.class;
+    }
+
+    @Override
+    public String getRoute() {
+        return "tags/by/id";
+    }
+
+    @Override
+    public String routeForGet() {
+        return String.format("find/tags/by/%s/%s", GET_PARAMETER_ATTRIBUTE, GET_PARAMETER_VALUE);
+    }
+
+    @Override
+    public String routeForPost() {
+        return "find/tags/by/id";
+    }
+
+    @Override
+    public String getDescription(RestHttpMethod method) {
+        switch(method) {
+        case GET:
+            return "Find tags by attribute and value";
+        case POST:
+            return "Find tags for given id list";
+        default:
+                return "Find tags by given id or attribute and value";
+        }
+    }
+
+    @Override
+    public Class<Tag> outClass() {
+        return Tag.class;
+    }
+
+    @Override
+    public boolean isResponseCollection() {
+        return true;
     }
 }

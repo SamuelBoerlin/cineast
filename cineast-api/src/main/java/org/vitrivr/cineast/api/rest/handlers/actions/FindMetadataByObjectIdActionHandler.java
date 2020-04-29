@@ -1,28 +1,34 @@
 package org.vitrivr.cineast.api.rest.handlers.actions;
 
-import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
-import org.vitrivr.cineast.core.data.entities.MediaObjectDescriptor;
-import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
-import org.vitrivr.cineast.api.messages.components.AbstractMetadataFilterDescriptor;
-import org.vitrivr.cineast.api.messages.lookup.OptionallyFilteredIdList;
-import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
-import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
-import org.vitrivr.cineast.standalone.config.Config;
-
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.vitrivr.cineast.api.messages.components.AbstractMetadataFilterDescriptor;
+import org.vitrivr.cineast.api.messages.lookup.OptionallyFilteredIdList;
+import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
+import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
+import org.vitrivr.cineast.core.data.entities.MediaObjectDescriptor;
+import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
+import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
+import org.vitrivr.cineast.standalone.config.Config;
 
 /**
  * Retrieves all the {@link MediaObjectMetadataDescriptor}s for the given ID of a {@link
  * MediaObjectDescriptor}
  */
 public class FindMetadataByObjectIdActionHandler extends
-        ParsingActionHandler<OptionallyFilteredIdList> {
+        ParsingActionHandler<OptionallyFilteredIdList, MediaObjectMetadataQueryResult> {
 
   private static final String ATTRIBUTE_ID = ":id";
 
+  @Override
+  public List<RestHttpMethod> supportedMethods() {
+    return Arrays.asList(RestHttpMethod.GET, RestHttpMethod.POST);
+  }
   /**
    * Processes a HTTP GET request.
    *
@@ -75,5 +81,20 @@ public class FindMetadataByObjectIdActionHandler extends
   @Override
   public Class<OptionallyFilteredIdList> inClass() {
     return OptionallyFilteredIdList.class;
+  }
+
+  @Override
+  public String getRoute() {
+    return "find/metadata/by/id/"+ATTRIBUTE_ID;
+  }
+
+  @Override
+  public String getDescription(RestHttpMethod method) {
+    return "Find metadata by object id";
+  }
+
+  @Override
+  public Class<MediaObjectMetadataQueryResult> outClass() {
+    return MediaObjectMetadataQueryResult.class;
   }
 }

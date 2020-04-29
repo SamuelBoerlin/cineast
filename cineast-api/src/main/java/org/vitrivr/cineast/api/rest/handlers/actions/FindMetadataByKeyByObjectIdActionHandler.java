@@ -1,27 +1,29 @@
 package org.vitrivr.cineast.api.rest.handlers.actions;
 
-import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
-import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
-import org.vitrivr.cineast.api.messages.components.MetadataKeyFilter;
-import org.vitrivr.cineast.api.messages.lookup.IdList;
-import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
-import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
-import org.vitrivr.cineast.standalone.config.Config;
-
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.vitrivr.cineast.api.messages.components.MetadataKeyFilter;
+import org.vitrivr.cineast.api.messages.lookup.IdList;
+import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
+import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
+import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
+import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
+import org.vitrivr.cineast.standalone.config.Config;
 
 /**
  * TODO: write JavaDoc
  *
  * @author loris.sauter
  */
-public class FindMetadataByKeyByObjectIdActionHandler extends ParsingActionHandler<IdList> {
+public class FindMetadataByKeyByObjectIdActionHandler extends ParsingActionHandler<IdList, MediaObjectMetadataQueryResult> {
   private static final String ATTRIBUTE_ID = ":id";
   private static final String KEY_NAME = ":key";
-  
+
   /**
    * Processes a HTTP GET request.
    *
@@ -55,8 +57,8 @@ public class FindMetadataByKeyByObjectIdActionHandler extends ParsingActionHandl
     final MediaObjectMetadataReader reader = new MediaObjectMetadataReader(Config.sharedConfig().getDatabase().getSelectorSupplier().get());
     final List<MediaObjectMetadataDescriptor> descriptors = reader.lookupMultimediaMetadata(context.getIdList());
     reader.close();
-    final MetadataKeyFilter prediate = MetadataKeyFilter.createForKeywords(key);
-    return new MediaObjectMetadataQueryResult("",descriptors.stream().filter(prediate).collect(Collectors.toList()));
+    final MetadataKeyFilter filter = MetadataKeyFilter.createForKeywords(key);
+    return new MediaObjectMetadataQueryResult("",descriptors.stream().filter(filter).collect(Collectors.toList()));
   }
   
   /**
@@ -67,5 +69,25 @@ public class FindMetadataByKeyByObjectIdActionHandler extends ParsingActionHandl
   @Override
   public Class<IdList> inClass() {
     return IdList.class;
+  }
+
+  @Override
+  public String getRoute() {
+    return String.format("find/metadata/with/%s/by/id/%s",KEY_NAME, ATTRIBUTE_ID);
+  }
+
+  @Override
+  public String getDescription(RestHttpMethod method) {
+    return "Find meta data for a given object id with specified key";
+  }
+
+  @Override
+  public Class<MediaObjectMetadataQueryResult> outClass() {
+    return MediaObjectMetadataQueryResult.class;
+  }
+
+  @Override
+  public List<RestHttpMethod> supportedMethods() {
+    return Arrays.asList(RestHttpMethod.GET, RestHttpMethod.POST);
   }
 }

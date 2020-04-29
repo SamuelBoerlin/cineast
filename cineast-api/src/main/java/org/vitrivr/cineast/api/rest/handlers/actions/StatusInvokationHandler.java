@@ -1,18 +1,19 @@
 package org.vitrivr.cineast.api.rest.handlers.actions;
 
 
-import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
+import java.util.Map;
+
 import org.vitrivr.cineast.api.messages.general.AnyMessage;
 import org.vitrivr.cineast.api.messages.general.Ping;
-
-import java.util.Map;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
+import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
 
 /**
  * @author rgasser
  * @version 1.0
  * @created 09.01.17
  */
-public class StatusInvokationHandler extends ParsingActionHandler<AnyMessage> {
+public class StatusInvokationHandler extends ParsingActionHandler<AnyMessage, Ping> {
     /**
      * Processes a HTTP GET request. Returns a {@link Ping} object
      *
@@ -27,5 +28,20 @@ public class StatusInvokationHandler extends ParsingActionHandler<AnyMessage> {
     @Override
     public Class<AnyMessage> inClass() {
         return AnyMessage.class;
+    }
+
+    @Override
+    public String getRoute() {
+        return "status";
+    }
+
+    @Override
+    public String getDescription(RestHttpMethod method) {
+        return "Get the status of the server";
+    }
+
+    @Override
+    public Class<Ping> outClass() {
+        return Ping.class;
     }
 }

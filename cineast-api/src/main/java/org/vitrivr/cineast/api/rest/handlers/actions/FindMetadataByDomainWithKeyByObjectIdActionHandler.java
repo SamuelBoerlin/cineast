@@ -1,16 +1,17 @@
 package org.vitrivr.cineast.api.rest.handlers.actions;
 
-import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
-import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
-import org.vitrivr.cineast.api.messages.general.AnyMessage;
-import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
-import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
-import org.vitrivr.cineast.standalone.config.Config;
-
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import org.vitrivr.cineast.api.messages.general.AnyMessage;
+import org.vitrivr.cineast.api.messages.result.MediaObjectMetadataQueryResult;
+import org.vitrivr.cineast.api.rest.RestHttpMethod;
+import org.vitrivr.cineast.api.rest.handlers.abstracts.ParsingActionHandler;
+import org.vitrivr.cineast.core.data.entities.MediaObjectMetadataDescriptor;
+import org.vitrivr.cineast.core.db.dao.reader.MediaObjectMetadataReader;
+import org.vitrivr.cineast.standalone.config.Config;
 
 /**
  * This class handles GET requests with an object id, domain and key and returns all matching
@@ -25,7 +26,7 @@ import java.util.stream.Collectors;
  * @author loris.sauter
  */
 public class FindMetadataByDomainWithKeyByObjectIdActionHandler extends
-        ParsingActionHandler<AnyMessage> {
+        ParsingActionHandler<AnyMessage, MediaObjectMetadataQueryResult> {
 
   public static final String OBJECT_ID_NAME = ":id";
   public static final String DOMAIN_NAME = ":domain";
@@ -38,7 +39,7 @@ public class FindMetadataByDomainWithKeyByObjectIdActionHandler extends
   }
 
   @Override
-  public Object doGet(Map<String, String> parameters) {
+  public MediaObjectMetadataQueryResult doGet(Map<String, String> parameters) {
     final String objectId = parameters.get(OBJECT_ID_NAME);
     final String domain = parameters.get(DOMAIN_NAME);
     final String key = parameters.get(KEY_NAME);
@@ -54,5 +55,20 @@ public class FindMetadataByDomainWithKeyByObjectIdActionHandler extends
   @Override
   public Class<AnyMessage> inClass() {
     return AnyMessage.class;
+  }
+
+  @Override
+  public String getRoute() {
+    return String.format("find/metadata/of/%s/in/%s/with/%s", OBJECT_ID_NAME, DOMAIN_NAME, KEY_NAME);
+  }
+
+  @Override
+  public String getDescription(RestHttpMethod method) {
+    return "Find meta data for specific object id in given domain with given key";
+  }
+
+  @Override
+  public Class<MediaObjectMetadataQueryResult> outClass() {
+    return MediaObjectMetadataQueryResult.class;
   }
 }
