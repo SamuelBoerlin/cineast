@@ -12,7 +12,9 @@ import org.apache.commons.math3.analysis.interpolation.SplineInterpolator;
 import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
+import org.vitrivr.cineast.core.config.QueryConfig;
 import org.vitrivr.cineast.core.config.ReadableQueryConfig;
+import org.vitrivr.cineast.core.data.CorrespondenceFunction;
 import org.vitrivr.cineast.core.data.FloatVectorImpl;
 import org.vitrivr.cineast.core.data.distance.SegmentDistanceElement;
 import org.vitrivr.cineast.core.data.m3d.IndexedTriMesh;
@@ -71,8 +73,14 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 	 */
 	private final int averageIterations;
 
+	/**
+	 * Whether the Jensen-Shannon divergence should be used to post-process the query and calculate the 
+	 * similarity scores.
+	 */
+	private boolean useJensenShannonDivergence = false;
+
 	public ClusterD2AndColorHistogram(int bins, float lambda, int averageIterations) {
-		super("cluster_d2_and_color_histogram", 1.0f /*TODO What should this be??*/, bins);
+		super("cluster_d2_and_color_histogram", (float)Math.sqrt(4 * bins) /*TODO Not sure if this is correct. For normalized histograms the max distance for each component is 2, hence sqrt(4*N) is max possible distance?*/, bins);
 		this.bins = bins;
 		this.lambda = lambda;
 		this.averageIterations = averageIterations;
@@ -97,6 +105,13 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 		/* Extract feature and persist it. */
 		float[] feature = this.featureVectorFromMesh(mesh);
 		this.persist(shot.getId(), new FloatVectorImpl(feature));
+	}
+
+	@Override
+	protected QueryConfig defaultQueryConfig(ReadableQueryConfig qc) {
+		return new QueryConfig(qc)
+				.setCorrespondenceFunctionIfEmpty(this.correspondence)
+				.setDistanceIfEmpty(QueryConfig.Distance.chisquared);
 	}
 
 	/**
@@ -141,19 +156,27 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 		/*final CorrespondenceFunction correspondence = qc.getCorrespondenceFunction().orElse(this.correspondence);
 		return ScoreElement.filterMaximumScores(partialResults.stream().map(v -> v.toScore(correspondence)));*/
 
-		//Jensen-Shannon Divergence as similarity measure
-		float[] feature = features.get(0);
-		return ScoreElement.filterMaximumScores(partialResults.stream().map(result -> {
-			List<float[]> resultFeaturesList = this.selector.getFeatureVectors("id", result.getSegmentId(), "feature");
-			if (resultFeaturesList.isEmpty()) {
-				LOGGER.warn("No features could be fetched for the provided segmentId '{}'. Skipping post processing...", result.getSegmentId());
-				return null;
-			}
+		if(this.useJensenShannonDivergence) {
+			//Jensen-Shannon Divergence as similarity measure
+			float[] feature = features.get(0);
+			return ScoreElement.filterMaximumScores(partialResults.stream().map(result -> {
+				List<float[]> resultFeaturesList = this.selector.getFeatureVectors("id", result.getSegmentId(), "feature");
+				if (resultFeaturesList.isEmpty()) {
+					LOGGER.warn("No features could be fetched for the provided segmentId '{}'. Skipping post processing...", result.getSegmentId());
+					return null;
+				}
 
-			float[] resultFeature = resultFeaturesList.get(0);
+				float[] resultFeature = resultFeaturesList.get(0);
 
-			return (ScoreElement) new SegmentScoreElement(result.getSegmentId(), Math.min(1.0f, Math.max(0.0f, 0.99f + this.calculateJensenShannonDivergence(feature, resultFeature))));
-		}).filter(score -> score != null));
+				return (ScoreElement) new SegmentScoreElement(result.getSegmentId(), Math.min(1.0f, Math.max(0.0f, 0.99f + this.calculateJensenShannonDivergence(feature, resultFeature))));
+			}).filter(score -> score != null));
+		} else {
+			//Use regular correspondence to calculate score.
+			//By default a linear correspondence function that scales the distance
+			//to 0-1.
+			final CorrespondenceFunction correspondence = qc.getCorrespondenceFunction().orElse(this.correspondence);
+			return ScoreElement.filterMaximumScores(partialResults.stream().map(v -> v.toScore(correspondence)));
+		}
 	}
 
 	/**
@@ -276,9 +299,18 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 			}
 		}
 
+		float maxBin = 0.0f;
+
 		float[] feature = new float[this.bins];
 		for(int i = 0; i < this.bins; i++) {
 			feature[i] = totalHistogram[i] / (float)this.averageIterations;
+			maxBin = Math.max(maxBin, feature[i]);
+		}
+
+		if(maxBin > 0) {
+			for(int i = 0; i < this.bins; i++) {
+				feature[i] = feature[i] / maxBin;
+			}
 		}
 
 		return feature;
