@@ -1,5 +1,7 @@
 package org.vitrivr.cineast.core.util.mesh;
 
+import java.awt.Color;
+
 import org.joml.Vector3f;
 import org.vitrivr.cineast.core.data.m3d.IndexedTriMesh.Face;
 import org.vitrivr.cineast.core.util.mesh.IndexedTriMeshUtil.SampleMapper;
@@ -17,7 +19,7 @@ public class DifferenceOfLaplacian implements SampleMapper<Float> {
 	}
 
 	@Override
-	public Float map(Face face, float u, float v, Vector3f position) {
+	public Float map(Face face, float u, float v, Vector3f position, Color color) {
 		float[] meanCurvatures = new float[4];
 
 		for(int i = 0; i < 4; i++) {

@@ -235,19 +235,11 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 
 		SampleMapper<Float> saliencyMapper = new DifferenceOfLaplacian(scores);
 
-		SampleMapper<ColorCode> colorMapper;
 		if(image != null) {
-			colorMapper = new TextureColorMapper(models[0], image);
-
 			LOGGER.info("Found model texture: {}", mesh.getTexturePath());
-		} else {
-			colorMapper = new SampleMapper<ColorCode>() {
-				@Override
-				public ColorCode map(Face face, float u, float v, Vector3f position) {
-					return new ColorCode(Color.WHITE, 0);
-				}
-			};
 		}
+		
+		SampleMapper<ColorCode> colorMapper = new TextureColorMapper(models[0], image);
 
 		float totalCurvature = IndexedTriMeshUtil.totalAbsoluteGaussianCurvature(models[0], faceMap);
 

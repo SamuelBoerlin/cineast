@@ -4,6 +4,7 @@ import org.vitrivr.cineast.core.data.raw.CachedDataFactory;
 import org.vitrivr.cineast.core.data.raw.images.MultiImage;
 import org.vitrivr.cineast.core.data.m3d.Mesh;
 import org.vitrivr.cineast.core.util.mesh.MeshTransformUtil;
+import org.vitrivr.cineast.core.util.web.ColorMeshParser;
 import org.vitrivr.cineast.core.util.web.ImageParser;
 import org.vitrivr.cineast.core.util.web.MeshParser;
 
@@ -35,6 +36,10 @@ public class ModelQueryContainer extends QueryContainer {
     public ModelQueryContainer(String data, CachedDataFactory factory) {
         if (MeshParser.isValidThreeJSV4Geometry(data)) {
             this.mesh = MeshParser.parseThreeJSV4Geometry(data);
+            this.normalizedMesh = MeshTransformUtil.khlTransform(mesh, 1.0f);
+            this.image = MultiImage.EMPTY_MULTIIMAGE;
+        } else if (ColorMeshParser.isValidColorGeometry(data)) {
+            this.mesh = ColorMeshParser.parseColorGeometry(data);
             this.normalizedMesh = MeshTransformUtil.khlTransform(mesh, 1.0f);
             this.image = MultiImage.EMPTY_MULTIIMAGE;
         } else if (ImageParser.isValidImage(data)) {

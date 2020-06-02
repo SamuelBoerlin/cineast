@@ -3,6 +3,8 @@ package org.vitrivr.cineast.core.util.mesh;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 
+import javax.annotation.Nullable;
+
 import org.joml.Matrix3f;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
@@ -37,9 +39,11 @@ public class TextureColorMapper implements SampleMapper<ColorCode> {
 	}
 
 	private final IndexedTriMesh model;
+
+	@Nullable
 	private final BufferedImage texture;
 
-	public TextureColorMapper(IndexedTriMesh model, BufferedImage texture) {
+	public TextureColorMapper(IndexedTriMesh model, @Nullable BufferedImage texture) {
 		this.model = model;
 		this.texture = texture;
 	}
@@ -128,8 +132,19 @@ public class TextureColorMapper implements SampleMapper<ColorCode> {
 	}
 
 	@Override
-	public ColorCode map(Face face, float u, float v, Vector3f position) {
-		Color color = sampleColor(this.model, face, u, v, this.texture);
-		return new ColorCode(color, cieLabCode(color));
+	public ColorCode map(Face face, float u, float v, Vector3f position, Color color) {
+		if(this.texture != null) {
+			//Multiply texture and vertex color together
+			Color textureColor = sampleColor(this.model, face, u, v, this.texture);
+			Color combinedColor = new Color(
+					textureColor.getRed() / 255.0f * color.getRed() / 255.0f,
+					textureColor.getGreen() / 255.0f * color.getGreen() / 255.0f,
+					textureColor.getBlue() / 255.0f * color.getBlue() / 255.0f
+					);
+			return new ColorCode(combinedColor, cieLabCode(combinedColor));
+		} else {
+			//No texture, use vertex color
+			return new ColorCode(color, cieLabCode(color));
+		}
 	}
 }
