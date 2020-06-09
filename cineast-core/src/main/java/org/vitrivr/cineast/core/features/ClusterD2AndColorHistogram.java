@@ -377,8 +377,6 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 
 		int samples = (int)Math.ceil(diff * 100);
 
-		double sum = 0;
-
 		double dkl13 = 0.0;
 		for(int i = 0; i < samples - 1; i++) {
 			float x1 = i / (float)(samples - 1) * diff + start;
@@ -390,13 +388,8 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 			double px = this.estimateDensity(feature1, sum1, bw1, mid);
 			double qx = this.estimateDensity(feature3, sum3, bw3, mid);
 
-			sum += px * dx;
-
 			dkl13 += px * divLog(px, qx, 0.0000001D) * dx;
 		}
-
-		//TODO Debug
-		System.out.println("Sum: " + sum + " " + diff + " " + samples);
 
 		double dkl23 = 0.0;
 		for(int i = 0; i < samples - 1; i++) {
