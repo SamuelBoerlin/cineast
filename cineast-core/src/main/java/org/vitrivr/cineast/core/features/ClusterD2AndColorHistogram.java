@@ -1,7 +1,9 @@
 package org.vitrivr.cineast.core.features;
 
-import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -77,17 +79,20 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 	 * Whether the Jensen-Shannon divergence should be used to post-process the query and calculate the 
 	 * similarity scores.
 	 */
-	private boolean useJensenShannonDivergence = false;
+	private boolean useJensenShannonDivergence;
 
-	public ClusterD2AndColorHistogram(int bins, float lambda, int averageIterations) {
+	private boolean debug = true;
+
+	public ClusterD2AndColorHistogram(int bins, float lambda, int averageIterations, boolean useJensenShannonDivergence) {
 		super("cluster_d2_and_color_histogram", (float)Math.sqrt(4 * bins) /*TODO Not sure if this is correct. For normalized histograms the max distance for each component is 2, hence sqrt(4*N) is max possible distance?*/, bins);
 		this.bins = bins;
 		this.lambda = lambda;
 		this.averageIterations = averageIterations;
+		this.useJensenShannonDivergence = useJensenShannonDivergence;
 	}
 
 	public ClusterD2AndColorHistogram() {
-		this(20, 8.0f, 5);
+		this(20, 8.0f, 3, true);
 	}
 
 	/**
@@ -109,9 +114,13 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 
 	@Override
 	protected QueryConfig defaultQueryConfig(ReadableQueryConfig qc) {
-		return new QueryConfig(qc)
+		QueryConfig defaultConf = new QueryConfig(qc)
 				.setCorrespondenceFunctionIfEmpty(this.correspondence)
 				.setDistanceIfEmpty(QueryConfig.Distance.chisquared);
+		if(this.debug) {
+			defaultConf.setMaxResults(2000).setResultsPerModule(2000);
+		}
+		return defaultConf;
 	}
 
 	/**
@@ -168,7 +177,7 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 
 				float[] resultFeature = resultFeaturesList.get(0);
 
-				return (ScoreElement) new SegmentScoreElement(result.getSegmentId(), Math.min(1.0f, Math.max(0.0f, 0.99f + this.calculateJensenShannonDivergence(feature, resultFeature))));
+				return (ScoreElement) new SegmentScoreElement(result.getSegmentId(), Math.min(1.0f, Math.max(0.0f, 0.99f - this.calculateJensenShannonDivergence(feature, resultFeature))));
 			}).filter(score -> score != null));
 		} else {
 			//Use regular correspondence to calculate score.
@@ -212,6 +221,25 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 			//Scale model to have a surface area of 100
 			IndexedTriMeshUtil.scaleSurface(model, 100.0f);
 
+			if(this.debug) {
+				File file = new File("debug_model_output_" + i + ".obj");
+
+				if(file.exists()) {
+					file.delete();
+				}
+
+				try(FileWriter fw = new FileWriter(file)) {
+					for(Vector3f vertex : model.getVertices()) {
+						fw.write("v " + vertex.x + " " + vertex.y + " " + vertex.z + "\n");
+					}
+					for(Face face : model.getFaces()) {
+						fw.write("f " + (face.getVertices()[0] + 1) + " " + (face.getVertices()[1] + 1) + " " + (face.getVertices()[2] + 1) + "\n");
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+
 			//Calculate mean curvatures
 			int numVertices = model.getVertices().size();
 			float[] modelScores = new float[numVertices];
@@ -238,7 +266,7 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 		if(image != null) {
 			LOGGER.info("Found model texture: {}", mesh.getTexturePath());
 		}
-		
+
 		SampleMapper<ColorCode> colorMapper = new TextureColorMapper(models[0], image);
 
 		float totalCurvature = IndexedTriMeshUtil.totalAbsoluteGaussianCurvature(models[0], faceMap);
@@ -299,7 +327,10 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 			maxBin = Math.max(maxBin, feature[i]);
 		}
 
-		if(maxBin > 0) {
+		LOGGER.info("Avg. Histogram: {}", Arrays.toString(feature));
+
+		if(maxBin > 0 && !this.useJensenShannonDivergence) {
+			//Normalize histogram
 			for(int i = 0; i < this.bins; i++) {
 				feature[i] = feature[i] / maxBin;
 			}
@@ -336,62 +367,77 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 		PolynomialSplineFunction s2 = this.splineDeriv2(feature2, 1.0f / sum2);
 		PolynomialSplineFunction s3 = this.splineDeriv2(feature3, 1.0f / sum3);
 
-		float bw1 = this.estimateBandwidth(s1);
-		float bw2 = this.estimateBandwidth(s2);
-		float bw3 = this.estimateBandwidth(s3);
+		float bw1 = this.estimateBandwidth(feature1, s1);
+		float bw2 = this.estimateBandwidth(feature2, s2);
+		float bw3 = this.estimateBandwidth(feature3, s3);
 
-		int samples = 1000;
+		float end = 0.5f / Math.max(bw1, Math.max(bw2, bw3));
+		float start = -end;
+		float diff = end - start;
+
+		int samples = (int)Math.ceil(diff * 100);
+
+		double sum = 0;
 
 		double dkl13 = 0.0;
-		for(int i = 0; i < samples; i++) {
-			float x1 = i / (float)(samples - 1);
-			float x2 = (i + 1) / (float)(samples - 1);
+		for(int i = 0; i < samples - 1; i++) {
+			float x1 = i / (float)(samples - 1) * diff + start;
+			float x2 = (i + 1) / (float)(samples - 1) * diff + start;
 
 			float dx = x2 - x1;
 			float mid = 0.5f * (x1 + x2);
 
-			double px = this.estimateDensity(feature1, 1.0f / sum1, bw1, mid);
-			double qx = this.estimateDensity(feature3, 1.0f / sum3, bw3, mid);
+			double px = this.estimateDensity(feature1, sum1, bw1, mid);
+			double qx = this.estimateDensity(feature3, sum3, bw3, mid);
 
-			dkl13 -= px * Math.log(px / qx) * dx;
+			sum += px * dx;
+
+			dkl13 += px * divLog(px, qx, 0.0000001D) * dx;
 		}
 
+		//TODO Debug
+		System.out.println("Sum: " + sum + " " + diff + " " + samples);
+
 		double dkl23 = 0.0;
-		for(int i = 0; i < samples; i++) {
-			float x1 = i / (float)(samples - 1);
-			float x2 = (i + 1) / (float)(samples - 1);
+		for(int i = 0; i < samples - 1; i++) {
+			float x1 = i / (float)(samples - 1) * diff + start;
+			float x2 = (i + 1) / (float)(samples - 1) * diff + start;
 
 			float dx = x2 - x1;
 			float mid = 0.5f * (x1 + x2);
 
-			double px = this.estimateDensity(feature2, 1.0f / sum2, bw2, mid);
-			double qx = this.estimateDensity(feature3, 1.0f / sum3, bw3, mid);
+			double px = this.estimateDensity(feature2, sum2, bw2, mid);
+			double qx = this.estimateDensity(feature3, sum3, bw3, mid);
 
-			dkl23 -= px * Math.log(px / qx) * dx;
+			dkl23 += px * divLog(px, qx, 0.0000001D) * dx;
 		}
 
 		return (float)(0.5f * dkl13 + 0.5f * dkl23);
 	}
 
+	private double divLog(double numerator, double denominator, double epsilon) {
+		if(Math.abs(numerator) < epsilon && Math.abs(denominator) < epsilon) {
+			return 0;
+		}
+		return Math.log(numerator / denominator);
+	}
+
 	/**
 	 * Estimates the density at a specific x for the given feature.
 	 * @param feature Feature to estimate density of
-	 * @param scale Feature scale
+	 * @param numSamples Number of samples (sum of feature)
 	 * @param bandwidth Kernel bandwidth
 	 * @param x Value to estimate density at
 	 * @return Density estimation of the feature at value x
 	 */
-	private double estimateDensity(float[] feature, float scale, double bandwidth, float x) {
+	private double estimateDensity(float[] feature, float numSamples, double bandwidth, float x) {
 		double density = 0.0;
-		float numSamples = 0.0f;
 
 		for(int i = 0; i < feature.length; i++) {
 			float sx = i / (float)(feature.length - 1);
-			float samplesForValue = feature[i] * scale;
 
 			double arg = (x - sx) / (double)bandwidth;
-			density += 1 / Math.sqrt(2 * Math.PI) * Math.exp(-0.5D * arg * arg) * samplesForValue;
-			numSamples += samplesForValue;
+			density += 1 / Math.sqrt(2 * Math.PI) * Math.exp(-0.5D * arg * arg) * feature[i];
 		}
 
 		return density / (numSamples * bandwidth);
@@ -419,10 +465,11 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 	/**
 	 * Estimates a kernel bandwidth h with the specified second derivative ({@link #splineDeriv2(float[], float)} of
 	 * the feature.
+	 * @param feature Feature to estimate bandwidth for
 	 * @param c Second derivative of the feature
 	 * @return Kernel bandwidth estimation
 	 */
-	private float estimateBandwidth(PolynomialSplineFunction c) {
+	private float estimateBandwidth(float[] feature, PolynomialSplineFunction c) {
 		double[] knots = c.getKnots();
 
 		//Second derivative of cubic polynomial is linear,
@@ -452,7 +499,7 @@ public class ClusterD2AndColorHistogram extends StagedFeatureModule {
 		double rk = 0.282095; //Integral of gaussian with variance=1, mean=0, from -inf to +inf = 1 / (2 * sqrt(pi))
 		double mu22 = 1.0; //Integral of c * x^2 * exp(-a*x^2), from -inf to +inf = c * sqrt(pi) / (2 * a^(3/2)). With c=1/sqrt(pi), a=1/2 --> integral = 1
 
-		int n = 20;
+		int n = feature.length;
 
 		//Bandwidth estimation
 		float h = (float)(Math.pow(rk / (mu22 * integralcsq), 1 / 5.0) * Math.pow(n, -1 / 5.0));
